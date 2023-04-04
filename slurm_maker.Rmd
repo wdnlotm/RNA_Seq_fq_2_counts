@@ -1,0 +1,354 @@
+---
+title: "slurm maker"
+output: html_notebook
+---
+
+
+#Trimmomatic
+```{bash}
+
+echo "" > submit_all_sbatch.bat
+
+account_name=mcnamara-lab
+n_core=8
+memory_in_MB=64000
+hours=3
+
+adapter=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/new_align_read/TruSeq3-PE.fa
+
+
+for infile in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/*_1.fq.gz
+do
+  sample_name="$(basename $infile _1.fq.gz)"
+  sbatch_filename=trimmo_$sample_name.slurm
+  
+  message_print=trimmo_$sample_name.out
+  
+  infile1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/"$(basename $infile _1.fq.gz)"_1.fq.gz
+  infile2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/"$(basename $infile _1.fq.gz)"_2.fq.gz
+  
+  output_dir=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/new_align_read/trimmed/
+  outfile1=$output_dir"$(basename $infile _1.fq.gz)"_paired_1.fq.gz
+  outfile1_1=$output_dir"$(basename $infile _1.fq.gz)"_unpaired_1.fq.gz
+  
+  outfile2=$output_dir"$(basename $infile _1.fq.gz)"_paired_2.fq.gz
+  outfile2_1=$output_dir"$(basename $infile _1.fq.gz)"_unpaired_2.fq.gz
+
+
+  echo '#!/bin/bash' > $sbatch_filename
+  echo "#SBATCH -n $n_core" >> $sbatch_filename
+  echo "#SBATCH --mem=$memory_in_MB" >> $sbatch_filename
+  echo "#SBATCH -t $hours:00:00" >> $sbatch_filename
+  echo "#SBATCH -o $message_print" >> $sbatch_filename
+  echo "#SBATCH -A $account_name" >> $sbatch_filename
+  echo "#SBATCH -p standard" >> $sbatch_filename
+  echo "" >> $sbatch_filename
+  echo 'module load trimmomatic/0.39' >> $sbatch_filename
+  echo "infile1=$infile1" >> $sbatch_filename
+  echo "infile2=$infile2" >> $sbatch_filename
+  echo "outfile1=$outfile1" >> $sbatch_filename
+  echo "outfile1_1=$outfile1_1" >> $sbatch_filename
+  echo "outfile2=$outfile2" >> $sbatch_filename
+  echo "outfile2_2=$outfile2_1" >> $sbatch_filename
+  echo "" >> $sbatch_filename
+  echo "java -jar \$EBROOTTRIMMOMATIC/trimmomatic-0.39.jar PE -phred33 -threads 8 \
+$infile1 $infile2 \
+$outfile1 $outfile1_1 $outfile2 $outfile2_1 \
+ILLUMINACLIP:$adapter:2:30:10 LEADING:3 \
+TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36" >> $sbatch_filename
+  
+  echo "sbatch $sbatch_filename" >> submit_all_sbatch.bat
+done
+
+
+```
+
+
+#STAR
+```{bash}
+#gz files requires 64GB
+
+echo "" > submit_all_sbatch.bat
+
+account_name=mcnamara-lab
+n_core=8
+memory_in_MB=64000
+hours=3
+
+
+gtffile=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.primary_assembly.annotation.gtf
+genomedir=/project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_star_20221007
+
+for infile in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/new_align_read/trimmed/*_paired_1.fq.gz
+do
+  sample_name="$(basename $infile _paired_1.fq.gz)"
+  sbatch_filename=star_$sample_name.slurm
+  message_print=star_$sample_name.out
+  
+  infile1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/new_align_read/trimmed/"$(basename $infile _paired_1.fq.gz)"_paired_1.fq.gz
+  infile2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/new_align_read/trimmed/"$(basename $infile _paired_1.fq.gz)"_paired_2.fq.gz
+  outfile=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/new_align_read/aligned_by_star/"$(basename $infile _paired_1.fq.gz)"_
+
+  
+  
+  
+  echo '#!/bin/bash' > $sbatch_filename
+  echo "#SBATCH -n $n_core" >> $sbatch_filename
+  echo "#SBATCH --mem=$memory_in_MB" >> $sbatch_filename
+  echo "#SBATCH -t $hours:00:00" >> $sbatch_filename
+  echo "#SBATCH -o $message_print" >> $sbatch_filename
+  echo "#SBATCH -A $account_name" >> $sbatch_filename
+  echo "#SBATCH -p standard" >> $sbatch_filename
+  echo "" >> $sbatch_filename
+  
+  echo 'module load star/2.7.9a' >> $sbatch_filename
+  echo "infile1=$infile1" >> $sbatch_filename
+  echo "infile2=$infile2" >> $sbatch_filename
+  echo "outfile=$outfile" >> $sbatch_filename  
+  
+  echo "STAR --genomeDir $genomedir --sjdbGTFfile $gtffile --runThreadN 8 --readFilesCommand zcat \
+  --readFilesIn $infile1 $infile2 --outFileNamePrefix $outfile --outSAMtype BAM SortedByCoordinate \
+  --outSAMunmapped None --outSAMattributes All --quantMode GeneCounts" >> $sbatch_filename  
+ 
+ echo "sbatch $sbatch_filename" >> submit_all_sbatch.bat
+done
+
+#--outFilterMismatchNmax 3 --outFilterMultimapNmax 1 
+
+```
+  
+
+
+
+
+annot_gff=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+featurecount_loc=/project/mcnamara-lab/myles_kim/featurecounts_latest.sif
+input_bam=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped_by_star/BCCR6N16Aligned.sortedByCoord.out.bam
+output_txt=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped_by_star/count_BCCR6N16.txt
+
+
+echo '#!/bin/bash' >> $file_name
+echo '#SBATCH -p standard' >> $file_name
+echo "#SBATCH -n $n_core" >> $file_name
+echo "#SBATCH --mem=$memory_in_MB" >> $file_name
+echo "#SBATCH -t $hours:00:00" >> $file_name
+echo "#SBATCH -o $message_print" >> $file_name
+echo "#SBATCH -A $account_name" >> $file_name
+echo "" >> $file_name
+echo "module purge" >> $file_name
+echo "annot_gff=$annot_gff" >> $file_name
+echo "featurecount_loc=$featurecount_loc" >> $file_name
+echo "input_bam=$input_bam" >> $file_name
+echo "output_txt=$output_txt" >> $file_name
+echo 'singularity exec $featurecount_loc \' >> $file_name
+echo 'featureCounts -T 8 -p -t gene -g gene_id -a $annot_gff -o $output_txt $input_bam' >> $file_name
+#!/bin/bash
+#SBATCH -n 16
+#SBATCH --mem=64000
+#SBATCH -t 10:00:00
+#SBATCH -o star_slurm.out
+#SBATCH -p standard
+#SBATCH -A mcnamara-lab
+module purge
+annot_gff=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+featurecount_loc=/project/mcnamara-lab/myles_kim/featurecounts_latest.sif
+input_bam=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped_by_star/BCCR6N16Aligned.sortedByCoord.out.bam
+output_txt=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped_by_star/count_BCCR6N16.txt
+singularity exec $featurecount_loc \
+featureCounts -T 8 -p -t gene -g gene_id -a $annot_gff -o $output_txt $input_bam
+
+
+```
+
+
+
+```{bash}
+
+
+echo "" > submit_all_sbatch.bat
+
+#kall_index=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.transcripts.idx
+kall_index=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.cdna.all.idx
+trimmed_fq=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/
+
+for infile in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/*_paired_1.fq
+do
+sample_name="$(basename $infile _paired_1.fq)"
+#mkdir $sample_name
+#mkdir $sample_name/kallisto
+
+
+echo $sample_name
+
+sbatch_filename=kallisto_$sample_name.slurm
+echo $sbatch_filename
+
+n_core=8
+memory_in_MB=64000
+hours=3
+message_print=$sample_name.out
+account_name=mcnamara-lab
+file1_name=$infile
+file2_name=$trimmed_fq"$(basename $infile _paired_1.fq)"_paired_2.fq
+out_dir=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/counts_by_kallisto/$sample_name/kallisto
+annot_gtf=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+
+echo '#!/bin/bash' > $sbatch_filename
+echo "#SBATCH -n $n_core" >> $sbatch_filename
+echo "#SBATCH --mem=$memory_in_MB" >> $sbatch_filename
+echo "#SBATCH -t $hours:00:00" >> $sbatch_filename
+echo "#SBATCH -o $message_print" >> $sbatch_filename
+echo "#SBATCH -A $account_name" >> $sbatch_filename
+echo "#SBATCH -p standard" >> $sbatch_filename
+echo "" >> $sbatch_filename
+echo "module purge" >> $sbatch_filename
+echo 'module load kallisto/0.46.2' >> $sbatch_filename
+echo "" >> $sbatch_filename
+echo "annot_gtf=$annot_gtf" >> $sbatch_filename
+echo "kall_index=$kall_index" >> $sbatch_filename
+echo "infile1=$file1_name" >> $sbatch_filename
+echo "infile2=$file2_name" >> $sbatch_filename
+echo "out_dir=$out_dir" >> $sbatch_filename
+echo 'kallisto quant -b 100 --genomebam --gtf $annot_gtf -t 8 -i $kall_index -o $out_dir $infile1 $infile2' >> $sbatch_filename
+#echo 'kallisto quant -b 100 -t 8 -i $kall_index -o $out_dir $infile1 $infile2' >> $sbatch_filename
+#echo 'kallisto quant -b 100 --genomebam --gtf $annot_gtf -t 8 -i $kall_index -o $out_dir $infile1 $infile2' >> $sbatch_filename
+#                   --bootstrap-samples=50
+echo "sbatch $sbatch_filename" >> submit_all_sbatch.bat
+
+done
+
+```
+
+
+
+```{bash}
+
+echo "" > submit_all_sbatch.bat
+
+memory_in_MB=32000
+n_core=8
+hours=10
+message_print=star_slurm.out
+account_name=mcnamara-lab
+file_name=test_slurm.slurm
+
+
+annot_gff=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+featurecount_loc=/project/mcnamara-lab/myles_kim/featurecounts_latest.sif
+input_bam=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped_by_star/BCCR6N16Aligned.sortedByCoord.out.bam
+output_txt=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped_by_star/count_BCCR6N16.txt
+
+
+echo '#!/bin/bash' >> $file_name
+echo '#SBATCH -p standard' >> $file_name
+echo "#SBATCH -n $n_core" >> $file_name
+echo "#SBATCH --mem=$memory_in_MB" >> $file_name
+echo "#SBATCH -t $hours:00:00" >> $file_name
+echo "#SBATCH -o $message_print" >> $file_name
+echo "#SBATCH -A $account_name" >> $file_name
+echo "" >> $file_name
+echo "module purge" >> $file_name
+echo "annot_gff=$annot_gff" >> $file_name
+echo "featurecount_loc=$featurecount_loc" >> $file_name
+echo "input_bam=$input_bam" >> $file_name
+echo "output_txt=$output_txt" >> $file_name
+echo 'singularity exec $featurecount_loc \' >> $file_name
+echo 'featureCounts -T 8 -p -t gene -g gene_id -a $annot_gff -o $output_txt $input_bam' >> $file_name
+#!/bin/bash
+#SBATCH -n 16
+#SBATCH --mem=64000
+#SBATCH -t 10:00:00
+#SBATCH -o star_slurm.out
+#SBATCH -p standard
+#SBATCH -A mcnamara-lab
+module purge
+annot_gff=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+featurecount_loc=/project/mcnamara-lab/myles_kim/featurecounts_latest.sif
+input_bam=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped_by_star/BCCR6N16Aligned.sortedByCoord.out.bam
+output_txt=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped_by_star/count_BCCR6N16.txt
+singularity exec $featurecount_loc \
+featureCounts -T 8 -p -t gene -g gene_id -a $annot_gff -o $output_txt $input_bam
+
+
+```
+
+```{bash}
+
+echo "" > submit_all_sbatch.bat
+
+  account_name=mcnamara-lab
+  n_core=8
+  memory_in_MB=64000
+  hours=3
+
+annot_gtf=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+htseq_loc=/project/mcnamara-lab/myles_kim/htseq_latest.sif
+
+for infile in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/aligned_by_star/*.bam
+do
+  sample_name="$(basename $infile _Aligned.sortedByCoord.out.bam)"
+  echo $sample_name
+
+  sbatch_filename=htseq_$sample_name.slurm
+  echo $sbatch_filename
+  
+  message_print=$sample_name.out
+  
+  out_file=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/counts_by_htseq/$sample_name.count_by_htseq.txt
+
+  
+  echo '#!/bin/bash' > $sbatch_filename
+  echo "#SBATCH -n $n_core" >> $sbatch_filename
+  echo "#SBATCH --mem=$memory_in_MB" >> $sbatch_filename
+  echo "#SBATCH -t $hours:00:00" >> $sbatch_filename
+  echo "#SBATCH -o $message_print" >> $sbatch_filename
+  echo "#SBATCH -A $account_name" >> $sbatch_filename
+  echo "#SBATCH -p standard" >> $sbatch_filename
+  echo "" >> $sbatch_filename
+  echo "annot_gtf=$annot_gtf" >> $sbatch_filename
+  echo "htseq_loc=$htseq_loc" >> $sbatch_filename
+  echo "infile=$infile" >> $sbatch_filename
+  echo "out_file=$out_file" >> $sbatch_filename
+  echo "" >> $sbatch_filename
+  echo 'singularity exec $htseq_loc htseq-count -s no -t gene -i gene_id --additional-attr=gene_name $infile $annot_gtf > $out_file' >> $sbatch_filename
+  
+  echo "sbatch $sbatch_filename" >> submit_all_sbatch.bat
+done
+
+
+
+
+#singularity exec $htseq_loc htseq-count -s no -t gene -i gene_id --additional-attr=gene_name
+```
+
+
+```{done}
+
+for file in ./*
+  do
+echo $file
+
+if [ $file == "./test_slurm.sslurm" ]
+  then
+    echo "Number is Even"
+  else
+    echo "I am doing any."
+fi
+done
+
+
+```
+
+
+```{bash}
+
+#Salmon
+out_dir=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/counts_by_salmon/BCCR6N16
+bamfile=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/aligned_by_star/BCCR6N16_Aligned.sortedByCoord.out.bam
+#tx_fa=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.transcripts.fa
+tx_fa=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.cdna.all.fa
+salmon quant -t $tx_fa -l A -a $bamfile -o $out_dir
+
+
+```
+

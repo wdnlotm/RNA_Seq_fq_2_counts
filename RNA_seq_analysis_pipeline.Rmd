@@ -1,0 +1,520 @@
+---
+title: "RNA_seq_analysis"
+author: "Myles"
+date: "9/26/2022"
+output: html_document`
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#GenomeIndex GRCh38.p14 at /project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_hisat2_20220930/ 
+```{bash}
+ls -ial /project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_hisat2_20220930/
+```
+
+#1. fastqc
+```{bash}
+ijob -c 8 --mem-per-cpu=32000  -p standard --time=03:00:00
+module load fastqc/0.11.5
+
+mkdir fastqc
+
+for filename in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/*.fq.gz
+do
+  echo "fastqc -o fastqc $filename"
+done
+
+
+for filename in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/*.fq.gz
+do
+  fastqc -o fastqc $filename
+done
+
+```
+
+
+#multiQC
+```{bash}
+cd fastqc
+module load multiqc
+multiqc --force .
+```
+
+
+#2. trimmomatic
+```{bash}
+mkdir trimmed
+module load trimmomatic
+
+
+for infile in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/*_1.fq.gz
+do
+  infile1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/"$(basename $infile _1.fq.gz)"_1.fq.gz
+  infile2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/"$(basename $infile _1.fq.gz)"_2.fq.gz
+  
+  outfile1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/"$(basename $infile _1.fq.gz)"_paired_1.fq
+  outfile1_1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/"$(basename $infile _1.fq.gz)"_unpaired_1.fq
+  
+  outfile2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/"$(basename $infile _1.fq.gz)"_paired_2.fq
+  outfile2_1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/"$(basename $infile _1.fq.gz)"_unpaired_2.fq
+  echo $infile1 
+  echo $infile2
+  echo $outfile1
+  echo $outfile1_1
+  echo $outfile2
+  echo $outfile2_1
+  
+  echo java -jar $EBROOTTRIMMOMATIC/trimmomatic-0.39.jar PE -phred33 -threads 8 \
+$infile1 $infile2 \
+$outfile1 $outfile1_1 $outfile2 $outfile2_1 \
+ILLUMINACLIP:TruSeq3-PE.fa:2:30:10 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36
+done
+```
+
+# testing trimmomatic command
+```{bash}
+java -jar /apps/software/standard/core/trimmomatic/0.39/trimmomatic-0.39.jar PE -phred33 -threads 8 \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/VCCR6P44_1.fq.gz \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/VCCR6P44_2.fq.gz \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/VCCR6P44_paired_1.fq.gz \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/VCCR6P44_unpaired_1.fq.gz \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/VCCR6P44_paired_2.fq.gz \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/VCCR6P44_unpaired_2.fq.gz \
+ILLUMINACLIP:TruSeq3-PE.fa:2:30:10 LEADING:3 TRAILING:3 MINLEN:36
+```
+
+```{bash}
+java -jar /apps/software/standard/core/trimmomatic/0.39/trimmomatic-0.39.jar PE -phred33 -threads 8 \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/BCCR6N16_1.fq.gz \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/BCCR6N16_2.fq.gz \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_1.fq \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_unpaired_1.fq \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_2.fq \
+/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_unpaired_2.fq \
+ILLUMINACLIP:TruSeq3-PE.fa:2:30:10 LEADING:3 TRAILING:3 MINLEN:36
+```
+
+
+#3. Star index building
+```{bash}
+#https://hbctraining.github.io/Intro-to-rnaseq-hpc-O2/lessons/03_alignment.html
+genomedir=/project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_star_20221002
+genome_fasta=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.dna.primary_assembly.fa
+GTFfile=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+STAR --runThreadN 8 --runMode genomeGenerate --genomeDir $genomedir --genomeFastaFiles $genome_fasta \
+--sjdbGTFfile $GTFfile --sjdbOverhang 150
+
+```
+
+
+#3. Star index building NEW 10/07/2022 
+```{bash}
+#https://hbctraining.github.io/Intro-to-rnaseq-hpc-O2/lessons/03_alignment.html
+genomedir=/project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_star_20221007
+genome_fasta=/project/mcnamara-lab/myles_kim/Genome_references/human/GRCh38.primary_assembly.genome.fa
+GTFfile=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.primary_assembly.annotation.gtf
+STAR --runThreadN 8 --runMode genomeGenerate --genomeDir $genomedir --genomeFastaFiles $genome_fasta \
+--sjdbGTFfile $GTFfile --sjdbOverhang 150
+
+```
+
+
+
+#STAR for align and count 10/07/2022
+```{bash}
+genomedir=/project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_star_20221007
+infile1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_1.fq
+infile2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_2.fq
+outfile=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/newmapped_by_star/BCCR6N16_
+GTFfile=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.primary_assembly.annotation.gtf
+
+STAR --genomeDir $genomedir --sjdbGTFfile $GTFfile --runThreadN 8 --readFilesIn $infile1 $infile2 --outFileNamePrefix $outfile --outSAMtype BAM SortedByCoordinate --outSAMunmapped None --outFilterMismatchNmax 3 --outFilterMultimapNmax 1 --outSAMattributes All --quantMode GeneCounts
+```
+
+
+#STAR for align and NO count
+```{bash}
+genomedir=/project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_star_20221002
+infile1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_1.fq
+infile2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_2.fq
+outfile=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped_by_star/BCCR6N16_
+
+STAR --genomeDir $genomedir  --runThreadN 8 --readFilesIn $infile1 $infile2 --outFileNamePrefix $outfile --outSAMtype BAM SortedByCoordinate --outSAMunmapped None --outFilterMismatchNmax 3 --outFilterMultimapNmax 1 --outSAMattributes All 
+
+```
+
+#STAR batch
+```{bash}
+
+genomedir=/project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_star_20221002
+
+for infile in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/*_1.fq.gz
+do
+  infile1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/"$(basename $infile _1.fq.gz)"_paired_1.fq
+  infile2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/"$(basename $infile _1.fq.gz)"_paired_2.fq
+  outfile=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/aligned_by_star/"$(basename $infile _1.fq.gz)"_
+  
+  echo $infile1
+  echo $infile2
+  echo $outfile
+  
+ STAR --genomeDir $genomedir  --runThreadN 8 --readFilesIn $infile1 $infile2 --outFileNamePrefix $outfile --outSAMtype BAM SortedByCoordinate --outSAMunmapped None --outFilterMismatchNmax 3 --outFilterMultimapNmax 1 --outSAMattributes All 
+  
+done
+  
+
+
+
+```
+
+
+
+
+```{bash}
+mkdir mapped
+module load gcc/9.2.0
+module load hisat2
+module load samtools
+
+genome_ref=/project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_hisat2_20220930/GRCh38.p14_genomic
+
+
+for infile in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/raw_data/*_1.fq.gz
+do
+  infile1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/"$(basename $infile _1.fq.gz)"_paired_1.fq.gz
+  infile2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/"$(basename $infile _1.fq.gz)"_paired_2.fq.gz
+  
+  output=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped/"$(basename $infile _1.fq.gz)"_mapped.bam
+  
+  #echo $infile1
+  #echo $infile2
+  #echo $output
+  hisat2 -p 8 -x $genome_ref -1 $infile1 -2 $infile2 | samtools view -Sb -F 4 -o $output
+done
+
+```
+ijob -c 8 --mem-per-cpu=32000 -A mcnamara-lab  -p standard --time=03:00:00
+
+```{bash}
+module load gcc/9.2.0
+module load hisat2
+module load samtools
+genome_ref=/project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_hisat2_tran_20221002/genome_tran
+  infile1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_1.fq
+  infile2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_2.fq
+  infile1_1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_unpaired_1.fq
+  infile2_1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_unpaired_2.fq
+  
+  output=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/aligned_by_hisat2/BCCR6N16_aligned.bam
+  
+  hisat2 -p 8 -x $genome_ref -1 $infile1 -2 $infile2 -U $infile1_1,$infile2_1 | samtools view -Sb -o $output
+```
+
+
+
+#Count with kallisto
+```{bash}
+#kallisto index build
+kallisto index -i gencode.v41.transcripts.idx gencode.v41.transcripts.fa 
+
+#The result is
+kall_index=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.transcripts.idx
+
+#Let's quantify BCCR6N16_paired_1.fq.gz   BCCR6N16_paired_2.fq.gz
+module load kallisto/0.46.2
+mkdir BCCR6N16_kallisto
+infile1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_1.fq.gz
+infile2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_2.fq.gz
+kall_index=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.transcripts.idx
+kallisto quant -i $kall_index -o BCCR6N16_kallisto $infile1 $infile2
+
+```
+
+
+#read tsv in R
+```{r}
+RNAseqCounts <- read.table(file='/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/counts/BCCR6N16_kallisto/abundance.tsv', sep = '\t', header = TRUE, fill = TRUE)
+
+target_id <- RNAseqCounts[,1]
+target_id_new <- str_extract(target_id,"ENSG[0-9]..........")
+```
+
+
+#Let's make directories to store quants
+```{bash}
+for infile in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/*_paired_1.fq.gz
+do
+  echo "$(basename $infile _paired_1.fq.gz)"
+  dir_name="$(basename $infile _paired_1.fq.gz)"_kallisto
+  echo $dir_name
+  if [ -d $dir_name ] 
+    then
+      echo "Directory  exists." 
+    else
+      echo "Directory does not exists."
+      mkdir $dir_name
+  fi
+done
+
+```
+
+
+```{bash}
+module load kallisto/0.46.2
+
+kall_index=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.transcripts.idx
+
+for infile in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/*_paired_1.fq.gz
+do
+file1_name="$(basename $infile _paired_1.fq.gz)"_paired_1.fq.gz
+file2_name="$(basename $infile _paired_1.fq.gz)"_paired_2.fq.gz
+echo $file1_name
+echo $file2_name
+dir_name=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/
+infile1=$dir_name$file1_name
+infile2=$dir_name$file2_name
+echo $infile1
+echo $infile2
+out_dir="$(basename $infile _paired_1.fq.gz)"_kallisto
+echo $out_dir
+kallisto quant -b -i $kall_index -o $out_dir $infile1 $infile2
+done
+```
+
+
+```{bash}
+module load kallisto/0.46.2
+
+
+echo "" > submit_all_sbatch.bat
+
+kall_index=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.transcripts.idx
+trimmed_fq=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/
+for infile in /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/*_paired_1.fq
+do
+sample_name="$(basename $infile _paired_1.fq)"
+#mkdir $sample_name
+#mkdir $sample_name/kallisto
+
+if [ $sample_name == "BCCR6N1" ]
+then
+echo $sample_name
+
+sbatch_filename=kallisto_$sample_name.slurm
+echo $sbatch_filename
+
+n_core=8
+memory_in_MB=64000
+hours=3
+message_print=$sample_name.out
+account_name=mcnamara-lab
+file1_name=$infile
+file2_name=$trimmed_fq"$(basename $infile _paired_1.fq)"_paired_2.fq
+out_dir=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/counts_by_kallisto/$sample_name/kallisto
+echo '#!/bin/bash' > $sbatch_filename
+echo "#SBATCH -n $n_core" >> $sbatch_filename
+echo "#SBATCH --mem=$memory_in_MB" >> $sbatch_filename
+echo "#SBATCH -t $hours:00:00" >> $sbatch_filename
+echo "#SBATCH -o $message_print" >> $sbatch_filename
+echo "#SBATCH -A $account_name" >> $sbatch_filename
+echo "#SBATCH -p standard" >> $sbatch_filename
+echo "" >> $sbatch_filename
+echo "module purge" >> $sbatch_filename
+echo 'module load kallisto/0.46.2' >> $sbatch_filename
+echo "" >> $sbatch_filename
+echo "kall_index=$kall_index" >> $sbatch_filename
+echo "infile1=$file1_name" >> $sbatch_filename
+echo "infile2=$file2_name" >> $sbatch_filename
+echo "out_dir=$out_dir" >> $sbatch_filename
+echo 'kallisto quant -b -t 8 -i $kall_index -o $out_dir $infile1 $infile2' >> $sbatch_filename
+echo "sbatch $sbatch_filename" >> submit_all_sbatch.bat
+fi
+
+
+
+
+done
+
+
+file2_name="$(basename $infile _paired_1.fq)"_paired_2.fq.gz
+echo $file1_name
+echo $file2_name
+dir_name=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/
+infile1=$dir_name$file1_name
+infile2=$dir_name$file2_name
+echo $infile1
+echo $infile2
+out_dir="$(basename $infile _paired_1.fq.gz)"_kallisto
+echo $out_dir
+kallisto quant -b -i $kall_index -o $out_dir $infile1 $infile2
+done
+```
+
+
+
+#FeatureCounts
+```{bash}
+annot_gff=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+
+featurecount_loc=/project/mcnamara-lab/myles_kim/featurecounts_latest.sif
+input_bam=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/aligned_by_star/BCCR6N16_Aligned.sortedByCoord.out.bam
+output_txt=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/count_testing/count_BCCR6N16.txt
+singularity exec $featurecount_loc \
+featureCounts -T 8 -p -t gene -g gene_id -a $annot_gff -o $output_txt $input_bam
+
+```
+
+
+#FeatureCounts 10/07/2022
+```{bash}
+GTFfile=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.primary_assembly.annotation.gtf
+featurecount_loc=/project/mcnamara-lab/myles_kim/featurecounts_latest.sif
+input_bam=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/newmapped_by_star/BCCR6N16_Aligned.sortedByCoord.out.bam
+output_txt=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/count_testing/count_new_BCCR6N16.txt
+singularity exec $featurecount_loc \
+featureCounts -T 8 -p -t gene -g gene_id -a $GTFfile -o $output_txt $input_bam
+
+
+#Read in R
+New_read <- read.table("/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/count_testing/count_new_BCCR6N16.txt", sep = '\t', header = TRUE, fill = TRUE)
+
+
+Gene_symbol <- gsub("\\..*","", Gene_symbol)
+
+```
+
+#FeatureCounts
+```{bash}
+annot_gff=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+featurecount_loc=/project/mcnamara-lab/myles_kim/featurecounts_latest.sif
+input_bam=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/aligned_by_hisat2/BCCR6N16_aligned.bam
+output_txt=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/count_testing/count_BCCR6N16_hisat2.txt
+singularity exec $featurecount_loc \
+featureCounts -T 8 -p -t gene -g gene_id -a $annot_gff -o $output_txt $input_bam
+
+```
+
+
+```{bash}
+annot_gff=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+featurecount_loc=/project/mcnamara-lab/myles_kim/featurecounts_latest.sif
+input_bam=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped_by_star/BCCR6N16Aligned.sortedByCoord.out.bam
+output_txt=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped_by_star/count_BCCR6N16_new_e.txt
+singularity exec $featurecount_loc \
+featureCounts -T 8 -p -t exon -g gene_id -a $annot_gff -o $output_txt $input_bam
+```
+
+```{bash}
+annot_gff=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+featurecount_loc=/project/mcnamara-lab/myles_kim/featurecounts_latest.sif
+input_bam=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped/BCCR6N16_mapped_new_sorted_mapped.bam
+output_txt=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/count_testing/count_BCCR6N16_hisat2_sm_feat.txt
+singularity exec $featurecount_loc \
+featureCounts -T 8 -p -t gene -g gene_id -a $annot_gff -o $output_txt $input_bam
+```
+
+
+
+#featureCounts all bam files together
+```{bash}
+cd aligned_by_star
+mkdir _count
+cd _count
+annot_gff=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+featurecount_loc=/project/mcnamara-lab/myles_kim/featurecounts_latest.sif
+input_bam=../*.bam
+output_txt=./count_star_aligned_all_bam.txt
+singularity exec $featurecount_loc \
+featureCounts -T 8 -p -t gene -g gene_id -a $annot_gff -o $output_txt $input_bam
+```
+
+
+```{r}
+countsfromStar <- read.table(file='/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/aligned_by_star/_count/count_star_aligned_all_bam.txt', sep = '\t', header = TRUE, fill = TRUE)
+
+for (ii in 7:30){
+  colnames(countsfromStar)[ii] <- substr(  colnames(countsfromStar)[ii], 4, (unlist(gregexpr('_', colnames(countsfromStar)[ii]))[1])-1)  
+}
+
+
+CAD_subject_counts <- read.csv("/project/mcnamara-lab/myles_kim/CAD_v_Normal/CAD_subjects/quantification/count/readcount_genename.csv")
+
+rownames(countsfromStar) <- countsfromStar[,1] 
+rownames(CAD_subject_counts) <- CAD_subject_counts[,1] 
+
+common_genes <- intersect(   rownames(countsfromStar), rownames(CAD_subject_counts)   )
+
+countsfromStar_common <- countsfromStar[common_genes, ]
+CAD_subject_counts_common <- CAD_subject_counts[common_genes, ]
+
+
+
+```
+
+
+```{bash}
+pwd
+cd /project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/aligned_by_star/
+pwd
+
+
+```
+
+
+
+```
+#HTSeq-count
+```{bash}
+annot_gff=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.annotation.gff3
+htseq_loc=/project/mcnamara-lab/myles_kim/htseq_latest.sif
+input_bam=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/mapped/BCCR6N16_mapped_sorted.bam
+output_txt=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/counts_featurecounts/count_ht_BCCR6N16.txt
+
+singularity exec $htseq_loc htseq-count --stranded=no --idattr=gene_id --type=exon --mode=union --format=bam $input_bam $annot_gff > $bam_file.pergene_counts
+
+htseq-count -s no -t gene -i gene_id --additional-attr=gene_name Alignment-files annotation-files > result_file.txt
+
+#-r name -f bam -t transcript $input_bam $annot_gff
+
+
+
+```
+
+
+#Let's read HTSeq reads
+```{r}
+
+#/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/counts_by_htseq
+HTSeq_read <- read.table("/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/counts_by_htseq/BCCR6N1.count_by_htseq.txt", sep = '\t', header = FALSE, fill = TRUE)
+
+```
+
+
+#Salmon 
+```{bash}
+grep "^>" <(gunzip -c GRCh38.primary_assembly.genome.fa.gz) | cut -d " " -f 1 > decoys.txt
+
+transcripts_index=/project/mcnamara-lab/myles_kim/Genome_references/human/index_salmon
+file1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_1.fq
+file2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_2.fq
+transcripts_quant=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/counts_by_salmon/BCCR6N16/
+GTFfile=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+salmon quant -i $transcripts_index -l A -1 $file1 -2 $file2 --validateMappings -o $transcripts_quant -g $GTFfile --seqBias
+salmon quant -i $transcripts_index -l A -1 $file1 -2 $file2 --validateMappings -o $transcripts_quant -g $GTFfile --seqBias --validateMappings
+
+```
+
+
+```{r}
+transcripts_index=/project/mcnamara-lab/myles_kim/Genome_references/human/salmon_index_w_decoy
+file1=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_1.fq
+file2=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/trimmed/BCCR6N16_paired_2.fq
+transcripts_quant=/project/mcnamara-lab/myles_kim/CAD_v_Normal/Normal/counts_by_salmon/BCCR6N16_w_decoy/
+GTFfile=/project/mcnamara-lab/myles_kim/Genome_references/human/Homo_sapiens.GRCh38.107.gtf
+salmon quant -i $transcripts_index -l A -1 $file1 -2 $file2 --validateMappings -o $transcripts_quant -g $GTFfile --seqBias
+salmon quant -i $transcripts_index -l A -1 $file1 -2 $file2 --validateMappings -o $transcripts_quant -g $GTFfile --seqBias --validateMappings
+```
+

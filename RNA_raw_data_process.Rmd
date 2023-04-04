@@ -1,0 +1,48 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+#STAR indexing
+```{bash}
+
+##### Command Line:
+STAR --runThreadN 8 --runMode genomeGenerate --genomeDir /project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_star_20221007 --genomeFastaFiles /project/mcnamara-lab/myles_kim/Genome_references/human/GRCh38.primary_assembly.genome.fa --sjdbGTFfile /project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.primary_assembly.annotation.gtf --sjdbOverhang 150
+
+
+
+STAR   --runMode genomeGenerate --runThreadN 8 --genomeDir /project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_star_20230327   --genomeFastaFiles /project/mcnamara-lab/myles_kim/Genome_references/human/GRCh38.primary_assembly.genome.fa      --sjdbGTFfile /project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.primary_assembly.annotation.gtf   --sjdbOverhang 150
+
+
+```
+
+
+#STAR indexing: ran this 2023 03 27. 
+```{bash}
+module purge
+module load star/2.7.9a
+
+STAR   --runMode genomeGenerate --runThreadN 8 --genomeDir /project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_star_20230327   --genomeFastaFiles /project/mcnamara-lab/myles_kim/Genome_references/human/GRCh38.primary_assembly.genome.fa      --sjdbGTFfile /project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.primary_assembly.annotation.gtf   --sjdbOverhang 150
+
+```
+
+
+# If wants to run with slurm
+```{bash}
+#!/bin/bash
+#SBATCH -n 16
+#SBATCH --mem=64000
+#SBATCH -t 3:00:00
+#SBATCH -o gindex_star.out
+#SBATCH -p standard
+
+module purge
+module load star/2.7.9a
+
+genomedir=/project/mcnamara-lab/myles_kim/Genome_references/human/genomeIndex_star_20230327
+genome_fasta=/project/mcnamara-lab/myles_kim/Genome_references/human/GRCh38.primary_assembly.genome.fa
+GTFfile=/project/mcnamara-lab/myles_kim/Genome_references/human/gencode.v41.primary_assembly.annotation.gtf
+
+STAR --runThreadN 8 --runMode genomeGenerate --genomeDir $genomedir --genomeFastaFiles $genome_fasta --sjdbGTFfile $GTFfile --sjdbOverhang 150
+```
+
